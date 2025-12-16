@@ -55,21 +55,57 @@ export async function run(ctx) {
 
     // === 3. 循环浏览商品 (Search -> Click -> Read -> Back) ===
     for (let i = 0; i < BROWSE_COUNT; i++) {
-      log(`\n📦 [第 ${i + 1} 个商品] 开始浏览流程`);
+      const cardSelector = 'div[data-component-type="s-search-result"]';
 
-      // 重新获取列表元素 (防止 DOM 失效)
-      // 排除广告，尽量找自然结果
-      const itemSelector = `div[data-component-type="s-search-result"] h2 a`;
-      await page.waitForSelector(itemSelector);
-      const items = await page.$$(itemSelector);
+      let cards = await page.$$(cardSelector);
 
-      if (items.length <= i) {
-        log("没有更多商品了");
+      // --- 懒加载防御 (同上一步，保留滚动逻辑) ---
+      let scrollAttempts = 0;
+      while (cards.length <= i && scrollAttempts < 3) {
+        log(
+          `⏳ 正在寻找第 ${i + 1} 个商品 (当前已加载: ${
+            cards.length
+          })，尝试滚动...`
+        );
+        await page.evaluate(() =>
+          window.scrollBy({ top: window.innerHeight * 1.5, behavior: "smooth" })
+        );
+        await delay(2000, 3000);
+        cards = await page.$$(cardSelector);
+        scrollAttempts++;
+      }
+
+      if (cards.length <= i) {
+        log("⚠️ 已滚动到底部，没有更多商品了");
         break;
       }
 
-      const targetItem = items[i];
+      const currentCard = cards[i];
 
+      // 2. [核心修改] 验证 ASIN (Amazon Standard Identification Number)
+      // 只有带有 ASIN 的才是真正的商品，头部广告或Widget通常 ASIN 为空
+      const asin = await currentCard.evaluate((el) =>
+        el.getAttribute("data-asin")
+      );
+
+      if (!asin || asin.trim() === "") {
+        log(`⚠️ 跳过索引 ${i}: 检测到非商品组件 (Header/Widget)`);
+        continue;
+      }
+
+      // 3. [多重保险] 寻找可点击的链接
+      // 策略：优先找标题链接 (h2 a)，如果找不到（某些广告位结构不同），则找图片链接
+      let targetItem = await currentCard.$("h2 a");
+
+      if (!targetItem) {
+        // Fallback: 尝试寻找图片链接 (针对结构变异的商品)
+        targetItem = await currentCard.$(".s-product-image-container a");
+      }
+
+      if (!targetItem) {
+        log(`⚠️ 跳过索引 ${i} (ASIN: ${asin}): 无法找到可点击的链接`);
+        continue;
+      }
       // 3.1 移动到目标商品
       log("正在寻找目标商品...");
       // 先稍微滚过头一点，再滚回来（极度拟人）
@@ -251,39 +287,39 @@ async function humanScroll(page, steps = 2) {
  * @returns {string} 随机的关键词
  */
 function getRandomProductKeyword() {
-    const keywords = [
-        // --- Switch Games (English / Japanese) ---
-        "The Legend of Zelda: Tears of the Kingdom",
-        "ゼルダの伝説 ティアーズ オブ ザ キングダム",
-        "Mario Kart 8 Deluxe", 
-        "マリオカート8 デラックス",
-        "Animal Crossing: New Horizons",
-        "あつまれ どうぶつの森",
-        "Splatoon 3",
-        "Ring Fit Adventure",
+  const keywords = [
+    // --- Switch Games (English / Japanese) ---
+    "The Legend of Zelda: Tears of the Kingdom",
+    "ゼルダの伝説 ティアーズ オブ ザ キングダム",
+    "Mario Kart 8 Deluxe",
+    "マリオカート8 デラックス",
+    "Animal Crossing: New Horizons",
+    "あつまれ どうぶつの森",
+    "Splatoon 3",
+    "Ring Fit Adventure",
 
-        // --- PlayStation Games (English / Japanese) ---
-        "God of War Ragnarök",
-        "Elden Ring",
-        "エルデンリング",
-        "Final Fantasy XVI",
-        "ファイナルファンタジーXVI",
-        "Cyberpunk 2077: Phantom Liberty",
-        "Resident Evil 4 Remake",
-        "BIOHAZARD RE:4", // 日版常见名称
+    // --- PlayStation Games (English / Japanese) ---
+    "God of War Ragnarök",
+    "Elden Ring",
+    "エルデンリング",
+    "Final Fantasy XVI",
+    "ファイナルファンタジーXVI",
+    "Cyberpunk 2077: Phantom Liberty",
+    "Resident Evil 4 Remake",
+    "BIOHAZARD RE:4", // 日版常见名称
 
-        // --- Electronics (Model Names Only - No suffixes like 'Camera'/'Mouse') ---
-        "Sony WH-1000XM5",      // 已去掉 Headphones
-        "AirPods Pro 2",        // 已去掉 Earbuds
-        "NVIDIA GeForce RTX 4090", // 已去掉 Graphics Card
-        "Logitech MX Master 3S",   // 已去掉 Mouse
-        "Keychron Q1 Pro",      // 已去掉 Keyboard
-        "Fujifilm X100VI",      // 已去掉 Camera
-        "Ricoh GR IIIx",
-        "Steam Deck OLED",
-        "PlayStation 5 Pro"
-    ];
+    // --- Electronics (Model Names Only - No suffixes like 'Camera'/'Mouse') ---
+    "Sony WH-1000XM5", // 已去掉 Headphones
+    "AirPods Pro 2", // 已去掉 Earbuds
+    "NVIDIA GeForce RTX 4090", // 已去掉 Graphics Card
+    "Logitech MX Master 3S", // 已去掉 Mouse
+    "Keychron Q1 Pro", // 已去掉 Keyboard
+    "Fujifilm X100VI", // 已去掉 Camera
+    "Ricoh GR IIIx",
+    "Steam Deck OLED",
+    "PlayStation 5 Pro",
+  ];
 
-    const randomIndex = Math.floor(Math.random() * keywords.length);
-    return keywords[randomIndex];
+  const randomIndex = Math.floor(Math.random() * keywords.length);
+  return keywords[randomIndex];
 }
