@@ -1,0 +1,25 @@
+{
+  "name": "worker",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "fingerprint-generator": "^2.1.78",
+    "fingerprint-injector": "^2.1.78",
+    "fs-extra": "^11.3.2",
+    "ghost-cursor": "^1.4.1",
+    "md5": "^2.3.0",
+    "puppeteer": "^24.33.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "puppeteer-har": "^1.1.2",
+    "readline-sync": "^1.4.10"
+  }
+}
