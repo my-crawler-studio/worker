@@ -5,6 +5,7 @@
 
 export default {
   name: "Amazon US",
+  type: "search",
   domains: ["amazon.com"],
   baseUrl: "https://www.amazon.com/",
 

@@ -8,11 +8,16 @@
  */
 
 export default {
-  // 站点名称（日志显示用）
-  name: "Site Name (e.g., Alibaba)",
+  // 站点名称
+  name: "Site Name",
 
-  // 匹配的域名列表，用于自动检测是否在正确页面
-  domains: ["example.com", "www.example.com"],
+  // [新增] Profile 类型定义
+  // 可选值: 'search' (搜索), 'discovery' (推荐流), 'detail' (详情页)
+  // 策略会检查此字段以确保兼容性
+  type: "search",
+
+  // 匹配的域名列表
+  domains: ["example.com"],
 
   // 入口地址
   baseUrl: "https://www.example.com/",

@@ -1,12 +1,11 @@
 /**
  * @file config/browser-config.js
  * @description 浏览器启动参数配置文件。
- * 定义了 Puppeteer 启动时的各项参数，如无头模式、窗口大小、沙箱设置等。
  * @module Config/Browser
  */
 
 export const BrowserConfig = {
-  // 是否开启无头模式 (根据你的 .env 或原始设置调整)
+  // 默认关闭无头模式，方便调试
   headless: false,
 
   // 浏览器启动参数
@@ -14,16 +13,16 @@ export const BrowserConfig = {
     "--no-sandbox",
     "--disable-setuid-sandbox",
     "--window-size=1280,800",
-    // 如果需要禁用自动化控制提示，可添加:
-    // "--disable-blink-features=AutomationControlled"
+    // 规KZ自动化检测
+    "--disablekz-blink-features=AutomationControlled"
   ],
 
-  // 设置为 null 以禁用默认的 800x600 视口，跟随窗口大小
+  // 视口设置
   defaultViewport: null,
 
-  // 忽略 HTTPS 错误 (开发环境下常用)
+  // 忽略 HTTPS 错误
   ignoreHTTPSErrors: true,
 
-  // 可以在这里配置超时时间
+  // 默认超时设置
   timeout: 30000,
 };

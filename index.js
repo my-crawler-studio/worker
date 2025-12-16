@@ -25,7 +25,6 @@ const __dirname = path.dirname(__filename);
 const CONFIG = {
   ProfilePath: path.join(__dirname, "./auth/account_profile.json"),
   BaseCaptureDir: path.join(__dirname, "./output/data"),
-  Headless: false,
 };
 
 async function main() {
@@ -39,9 +38,7 @@ async function main() {
   let profileData = loadOrInitProfileData(CONFIG.ProfilePath);
 
   // 3. 启动核心引擎
-  const { browser, injector, fingerprint } = await launchBrowser({
-    Headless: CONFIG.Headless,
-  });
+  const { browser, injector, fingerprint } = await launchBrowser();
   const page = await browser.newPage();
 
   // 注入指纹 (使用存储的指纹或新生成的)

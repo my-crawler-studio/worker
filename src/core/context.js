@@ -7,19 +7,12 @@
 import { createCursor } from "ghost-cursor";
 import * as fileUtils from "../utils/file-system.js";
 import { delay } from "../utils/helpers.js";
+import * as nav from "../actions/navigation.js"; // [引用新增]
 
-/**
- * 构建执行上下文
- * @param {Object} page - Puppeteer Page 对象
- * @param {Object} browser - Puppeteer Browser 对象
- * @param {Object} profileData - 当前加载的账号数据
- * @param {String} profilePath - 账号数据文件路径
- * @returns {Object} 上下文对象 ctx
- */
 export function buildContext(page, browser, profileData, profilePath) {
   const cursor = createCursor(page);
 
-  // 注入通用工具到上下文，策略层直接调用 ctx.utils.xxx
+  // 注入通用工具到上下文
   const utils = {
     log: (msg) => console.log(`🤖 [拟人] ${msg}`),
     delay: delay,
@@ -29,6 +22,10 @@ export function buildContext(page, browser, profileData, profilePath) {
       fileUtils.writeJson(profilePath, profileData);
       console.log("💾 Cookies 已保存");
     },
+    // [新增] 导航工具集成
+    goto: (url, options) => nav.goto(page, url, options),
+    goBack: () => nav.goBack(page),
+    reload: () => nav.reload(page),
   };
 
   return { page, cursor, browser, utils, profileData };

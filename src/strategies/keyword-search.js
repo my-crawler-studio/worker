@@ -12,6 +12,8 @@ import {
 import { getRandomProductKeyword } from "../utils/keywords.js";
 import { captureErrorState } from "../utils/logger.js";
 
+export const SUPPORTED_TYPES = ["search"];
+
 /**
  * 执行搜索与浏览策略
  * @param {Object} ctx - 核心上下文 (page, cursor, utils)
@@ -20,6 +22,13 @@ import { captureErrorState } from "../utils/logger.js";
 export async function run(ctx, profile) {
   const { page, cursor, utils } = ctx;
   const { log, delay } = utils;
+
+  if (!SUPPORTED_TYPES.includes(profile.type)) {
+    const errorMsg = `❌ [策略不兼容] 策略 'KeywordSearch' 仅支持 [${SUPPORTED_TYPES.join(", ")}] 类型，但当前 Profile 类型为 '${profile.type || "未定义"}'`;
+    log(errorMsg);
+    throw new Error(errorMsg);
+  }
+
   const { selectors } = profile; // 解构获取当前网站的选择器
 
   try {
