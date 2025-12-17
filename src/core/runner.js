@@ -90,15 +90,6 @@ export async function startInteractiveLoop(ctx, strategies, profiles) {
           }
           // ==========================================
 
-          if (
-            strategy.SUPPORTED_TYPES &&
-            !strategy.SUPPORTED_TYPES.includes(profile.type)
-          ) {
-            throw new Error(
-              `类型不匹配: 策略需要 [${strategy.SUPPORTED_TYPES}] 但 Profile 是 '${profile.type}'`
-            );
-          }
-
           // 运行策略
           await strategy.run(ctx, profile);
         } catch (error) {

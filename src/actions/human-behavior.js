@@ -59,19 +59,18 @@ export async function humanHover(cursor, page, selectors) {
   const shuffled = selectors.sort(() => 0.5 - Math.random());
 
   for (const selector of shuffled) {
-    if (Math.random() > 0.5) continue; // 50% 概率跳过
+    if (Math.random() > 0.5) continue;
     try {
-      // === [Playwright 优化] ===
-      // 使用原生的 isVisible，比 $eval 更准确，自动处理 display:none 等情况
       const isVisible = await page.isVisible(selector).catch(() => false);
-      
       if (isVisible) {
+        // === 这里现在安全了 ===
+        // CursorAdapter.move 会接收这个 selector 字符串
+        // 并自动计算 Playwright 的 coordinates
         await cursor.move(selector);
+        
         await new Promise((r) => setTimeout(r, 500 + Math.random() * 1200));
       }
-    } catch (e) {
-      /* 忽略选择器找不到或移动过程中的错误 */
-    }
+    } catch (e) { /* ignore */ }
   }
 }
 
