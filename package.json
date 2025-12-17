@@ -14,8 +14,11 @@
     "fingerprint-generator": "^2.1.78",
     "fingerprint-injector": "^2.1.78",
     "fs-extra": "^11.3.2",
+    "ghost-cursor": "^1.4.1",
     "md5": "^2.3.0",
     "playwright": "^1.57.0",
+    "playwright-extra": "^4.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
     "readline-sync": "^1.4.10"
   }
 }

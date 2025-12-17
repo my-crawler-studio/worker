@@ -1,7 +1,7 @@
 /**
  * @file src/core/runner.js
- * @description 任务运行器。
- * 更新：增强登录模式，支持手动输入验证链接进行跳转。
+ * @description 任务运行器 (Playwright 版)。
+ * 负责：交互式命令行循环、策略调度、手动登录流程。
  */
 
 import readline from "readline-sync";
@@ -10,13 +10,14 @@ export async function startInteractiveLoop(ctx, strategies, profiles) {
   const profileKeys = Object.keys(profiles);
   const strategyKeys = Object.keys(strategies);
 
+  // 简单的容错处理，防止没有 profile 的情况
   let lastProfileKey = profileKeys.includes("shopee")
     ? "shopee"
-    : profileKeys[0];
-  let lastStrategyKey = strategyKeys[0];
+    : profileKeys[0] || "default";
+  let lastStrategyKey = strategyKeys[0] || "default";
 
   console.log("\n==================================================");
-  console.log(`✅ 系统就绪`);
+  console.log(`✅ 系统就绪 (Playwright Engine)`);
   console.log(`   可选站点: [${profileKeys.join(", ")}]`);
   console.log(`   可选策略: [${strategyKeys.join(", ")}]`);
   console.log("--------------------------------------------------");
@@ -31,7 +32,6 @@ export async function startInteractiveLoop(ctx, strategies, profiles) {
 
     switch (command) {
       case "r":
-        // ... (省略选择 Profile/Strategy 的输入部分，保持原样) ...
         const pInput = readline
           .question(
             `Select Profile [${profileKeys.join(
@@ -66,19 +66,18 @@ export async function startInteractiveLoop(ctx, strategies, profiles) {
           const profile = profiles[pKey];
           const strategy = strategies[sKey];
 
-          // === [新增] 关键步骤：注入 LocalStorage ===
+          // === 关键步骤：注入 LocalStorage ===
           if (ctx.profileData.localStorage) {
             console.log("⚡️ 检测到 LocalStorage 数据，正在恢复...");
 
-            // 1. 必须先到达目标域名，才能操作 LS
-            // 只有当前 url 不是目标域名时才跳转，避免重复刷新
+            // Playwright url() 是方法，与 Puppeteer 一致
             if (!ctx.page.url().includes(profile.baseUrl)) {
               await ctx.page.goto(profile.baseUrl, {
                 waitUntil: "domcontentloaded",
               });
             }
 
-            // 2. 注入数据
+            // 注入数据
             await ctx.page.evaluate((data) => {
               localStorage.clear();
               for (const key in data) {
@@ -99,15 +98,18 @@ export async function startInteractiveLoop(ctx, strategies, profiles) {
               `类型不匹配: 策略需要 [${strategy.SUPPORTED_TYPES}] 但 Profile 是 '${profile.type}'`
             );
           }
+
+          // 运行策略
           await strategy.run(ctx, profile);
         } catch (error) {
           console.error(`⚠️ 任务执行失败: ${error.message}`);
+          console.error(error.stack); // 打印堆栈以便调试
         }
         console.log("✅ 任务结束\n");
         break;
 
       case "l":
-        // === 手动登录逻辑 (增强版) ===
+        // === 手动登录逻辑 ===
         console.log("\n🔑 [手动登录模式]");
         const loginProfileKey = readline
           .question(`选择要登录的站点 [${profileKeys.join("/")}]: `)
@@ -126,7 +128,7 @@ export async function startInteractiveLoop(ctx, strategies, profiles) {
           );
           console.log("   🛠  常用指令：");
           console.log("      - 粘贴 http链接 : 跳转验证链接");
-          console.log("      - 输入 'home'   : 强制回首页 (解决页面卡死转圈)");
+          console.log("      - 输入 'home'   : 强制回首页");
           console.log("      - 直接 [Enter]  : 登录完成，保存状态");
           console.log(
             "----------------------------------------------------------------"
@@ -137,14 +139,13 @@ export async function startInteractiveLoop(ctx, strategies, profiles) {
             const input = readline.question("\n(登录中) > ").trim();
 
             if (!input) {
-              loggingIn = false; // 回车保存
+              loggingIn = false;
             } else if (input === "home") {
-              // [新增] 解决卡死问题
               console.log("🏠 正在强制跳转回首页...");
               await ctx.page.goto(targetProfile.baseUrl, {
                 waitUntil: "domcontentloaded",
               });
-              console.log("✅ 已回到首页，请检查是否已登录。");
+              console.log("✅ 已回到首页。");
             } else if (input.startsWith("http")) {
               console.log(`🔗 跳转验证链接...`);
               try {
@@ -158,8 +159,8 @@ export async function startInteractiveLoop(ctx, strategies, profiles) {
           }
 
           console.log("💾 正在保存完整会话 (Cookie + LS)...");
-          await ctx.utils.saveSession(); // 调用新的保存方法
-          console.log(`🎉 保存成功！请按 'r' 运行任务。`);
+          await ctx.utils.saveSession();
+          console.log(`🎉 保存成功！`);
         } catch (err) {
           console.error(`❌ 出错: ${err.message}`);
         }
