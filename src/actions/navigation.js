@@ -1,15 +1,13 @@
 /**
  * @file src/actions/navigation.js
- * @description 基础导航动作封装。
- * 统一管理页面的跳转、回退以及等待逻辑。
- * @module Actions/Navigation
+ * @description 基础导航动作封装 (Playwright 版)。
  */
 
 /**
  * 智能跳转到指定 URL
- * @param {Object} page - Puppeteer Page 对象
- * @param {String} url - 目标地址
- * @param {Object} options - 跳转选项
+ * @param {import("playwright").Page} page
+ * @param {String} url
+ * @param {Object} options
  */
 export async function goto(page, url, options = {}) {
   const defaultOptions = {
@@ -26,22 +24,25 @@ export async function goto(page, url, options = {}) {
 
 /**
  * 拟人化回退
- * @param {Object} page - Puppeteer Page 对象
+ * @param {import("playwright").Page} page
  */
 export async function goBack(page) {
   try {
+    // Playwright 的 goBack 如果无法回退会返回 null，不会抛错，但保持 try-catch 是好习惯
     await page.goBack({ waitUntil: "domcontentloaded" });
   } catch (error) {
-    console.warn(
-      `⚠️ [导航警告] 回退操作失败 (可能是因为已经在第一页): ${error.message}`
-    );
+    console.warn(`⚠️ [导航警告] 回退操作可能无效: ${error.message}`);
   }
 }
 
 /**
  * 刷新页面
- * @param {Object} page
+ * @param {import("playwright").Page} page
  */
 export async function reload(page) {
-  await page.reload({ waitUntil: "domcontentloaded" });
+  try {
+    await page.reload({ waitUntil: "domcontentloaded" });
+  } catch (error) {
+    console.error(`❌ 刷新失败: ${error.message}`);
+  }
 }

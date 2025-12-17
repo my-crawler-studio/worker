@@ -1,11 +1,11 @@
 /**
  * @file src/actions/human-behavior.js
- * @description 核心拟人化行为库，包含随机悬停、变速滚动、阅读模式等原子操作。
- * @module Actions/HumanBehavior
+ * @description 核心拟人化行为库 (Playwright 版)。
+ * 升级：使用 Playwright 原生 isVisible 替代 $eval 检查，提升稳定性。
  */
 
 /**
- * 策略 A + B: 深度阅读模式 (原 executeHumanReadingStrategy)
+ * 策略 A + B: 深度阅读模式
  * @param {Object} ctx - 执行上下文
  * @param {Array<String>} hoverSelectors - 页面内用于随机悬停的选择器列表
  */
@@ -18,8 +18,9 @@ export async function executeHumanReadingStrategy(ctx, hoverSelectors) {
   // 1. 初始视觉扫描
   await humanHover(cursor, page, hoverSelectors);
 
-  // 2. 深度阅读滚动 (Scroll Dynamics)
+  // 2. 深度阅读滚动
   log("📜 [滚动] 开始阅读详情...");
+  // evaluate 内部逻辑是纯浏览器 JS，Playwright 与 Puppeteer 通用
   await page.evaluate(async () => {
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -51,30 +52,31 @@ export async function executeHumanReadingStrategy(ctx, hoverSelectors) {
 }
 
 /**
- * 随机悬停 (Strategy A)
+ * 随机悬停 (适配 Playwright)
  */
 export async function humanHover(cursor, page, selectors) {
   if (!selectors || selectors.length === 0) return;
   const shuffled = selectors.sort(() => 0.5 - Math.random());
 
   for (const selector of shuffled) {
-    if (Math.random() > 0.5) continue;
+    if (Math.random() > 0.5) continue; // 50% 概率跳过
     try {
-      const isVisible = await page
-        .$eval(selector, (elem) => elem && elem.offsetParent !== null)
-        .catch(() => false);
+      // === [Playwright 优化] ===
+      // 使用原生的 isVisible，比 $eval 更准确，自动处理 display:none 等情况
+      const isVisible = await page.isVisible(selector).catch(() => false);
+      
       if (isVisible) {
         await cursor.move(selector);
         await new Promise((r) => setTimeout(r, 500 + Math.random() * 1200));
       }
     } catch (e) {
-      /* ignore */
+      /* 忽略选择器找不到或移动过程中的错误 */
     }
   }
 }
 
 /**
- * 列表滚动
+ * 列表滚动 (纯浏览器操作，无需修改)
  */
 export async function humanScroll(page, steps = 2) {
   await page.evaluate(async (count) => {
