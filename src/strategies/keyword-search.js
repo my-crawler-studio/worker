@@ -26,7 +26,7 @@ export async function run(ctx, profile) {
 
   try {
     const SEARCH_KEYWORD = getRandomProductKeyword();
-    const BROWSE_COUNT = 3;
+    const BROWSE_COUNT = 1;
 
     // 1. 进入主页
     if (!page.url().includes(profile.domains[0])) {
@@ -42,18 +42,20 @@ export async function run(ctx, profile) {
       // === [关键] 直接调用 cursor.click(selector) ===
       // Adapter 会自动处理坐标转换，不会报错
       await cursor.click(selectors.searchInput);
-      
+
       // 清空并输入
       await page.locator(selectors.searchInput).clear(); // Playwright 原生 clear
-      
+
       log(`正在输入: ${SEARCH_KEYWORD}`);
-      await page.locator(selectors.searchInput).pressSequentially(SEARCH_KEYWORD, {
-        delay: 100 + Math.random() * 100,
-      });
-      
+      await page
+        .locator(selectors.searchInput)
+        .pressSequentially(SEARCH_KEYWORD, {
+          delay: 100 + Math.random() * 100,
+        });
+
       await delay(500, 1000);
       await page.keyboard.press("Enter");
-      await page.waitForLoadState('domcontentloaded');
+      await page.waitForLoadState("domcontentloaded");
     }
 
     // 3. 商品浏览
@@ -75,7 +77,8 @@ export async function run(ctx, profile) {
       // 寻找链接 (优先标题)
       let targetItem = currentCard.locator(selectors.titleLink).first();
       if (!(await targetItem.count())) {
-        if (selectors.imageLink) targetItem = currentCard.locator(selectors.imageLink).first();
+        if (selectors.imageLink)
+          targetItem = currentCard.locator(selectors.imageLink).first();
       }
 
       if (!(await targetItem.count())) continue;
@@ -84,15 +87,18 @@ export async function run(ctx, profile) {
       // 我们把 Playwright Locator 传进去，Adapter 会搞定 boundingBox
       log("点击商品...");
       try {
-          await cursor.click(targetItem);
+        await cursor.click(targetItem);
       } catch (err) {
-          log(`⚠️ 拟人点击失败 (${err.message})，尝试原生点击`);
-          await targetItem.click(); // 兜底
+        log(`⚠️ 拟人点击失败 (${err.message})，尝试原生点击`);
+        await targetItem.click(); // 兜底
       }
 
       // 等待详情页
       try {
-        await page.waitForSelector(selectors.productDetailTitle, { timeout: 8000, state: 'visible' });
+        await page.waitForSelector(selectors.productDetailTitle, {
+          timeout: 8000,
+          state: "visible",
+        });
       } catch (e) {
         log("加载稍慢，继续阅读...");
       }
@@ -107,7 +113,6 @@ export async function run(ctx, profile) {
 
     if (utils.saveSession) await utils.saveSession();
     log("✅ 任务完成");
-
   } catch (error) {
     await captureErrorState(page, error);
   }

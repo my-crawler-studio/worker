@@ -139,7 +139,7 @@ export async function initSystem(config) {
   const page = await context.newPage();
 
   // 7. 构建上下文
-  const ctx = buildContext(page, context, browser, profileData, profilePath);
+  const ctx = await buildContext(page, context, browser, profileData, profilePath);
 
   return { browser, context, page, ctx, sessionDir };
 }
