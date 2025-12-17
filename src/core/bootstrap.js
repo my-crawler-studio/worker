@@ -1,6 +1,7 @@
 /**
  * @file src/core/bootstrap.js
- * @description 系统启动引导模块 (接口严格匹配版)
+ * @description 系统启动引导模块 (Playwright Native Storage 版)。
+ * 核心：在 Context 创建阶段直接注入 storageState，实现自动登录。
  */
 
 import path from "path";
@@ -11,30 +12,70 @@ import { getFormattedTimestamp } from "../utils/helpers.js";
 import * as fileUtils from "../utils/file-system.js";
 
 /**
- * 校验指纹包是否有效
- * @param {Object} bundle - 可能是 BrowserFingerprintWithHeaders 或旧结构
+ * 智能构建 storageState 对象
+ * 兼容旧版数据 (flat cookies/localStorage) 和新版标准数据
+ */
+function normalizeStorageState(profileData) {
+  // 1. 如果已经是新版结构，直接返回
+  if (profileData.storageState) {
+    return profileData.storageState;
+  }
+
+  console.log("⚠️ 检测到旧版数据结构，正在尝试迁移到 Playwright StorageState...");
+
+  // 2. 构造基础结构
+  const state = {
+    cookies: [],
+    origins: []
+  };
+
+  // 3. 迁移 Cookies
+  if (Array.isArray(profileData.cookies)) {
+    state.cookies = profileData.cookies;
+  }
+
+  // 4. 迁移 LocalStorage (难点：旧版数据没有 Origin 信息)
+  // 策略：尝试从 Cookie 中推断主要域名，或者放弃 LS (让用户重新登录一次即可)
+  if (profileData.localStorage && Object.keys(profileData.localStorage).length > 0) {
+    // 简单的启发式算法：找 Cookie 里出现最多的域名
+    const domainCounts = {};
+    state.cookies.forEach(c => {
+      const d = c.domain.startsWith('.') ? c.domain.substring(1) : c.domain;
+      domainCounts[d] = (domainCounts[d] || 0) + 1;
+    });
+    
+    // 找到最可能的域名 (例如 amazon.com)
+    const topDomain = Object.keys(domainCounts).sort((a, b) => domainCounts[b] - domainCounts[a])[0];
+
+    if (topDomain) {
+      const origin = `https://www.${topDomain}`; // 猜测 Origin
+      console.log(`💡 猜测 LocalStorage 所属源为: ${origin}`);
+      
+      state.origins.push({
+        origin: origin,
+        localStorage: Object.entries(profileData.localStorage).map(([k, v]) => ({
+          name: k,
+          value: String(v) // LS 值必须是字符串
+        }))
+      });
+    } else {
+      console.warn("⚠️ 无法推断 LocalStorage 的来源域名，将丢弃旧 LS 数据 (登录状态可能失效，请手动登录一次)");
+    }
+  }
+
+  return state;
+}
+
+/**
+ * 校验指纹包
  */
 function validateFingerprintBundle(bundle) {
-  // 情况 A: 新接口结构 { fingerprint: { screen: ... }, headers: ... }
   if (bundle && bundle.fingerprint && bundle.fingerprint.screen) {
-    return {
-      valid: true,
-      screen: bundle.fingerprint.screen,
-      navigator: bundle.fingerprint.navigator,
-      type: "new",
-    };
+    return { valid: true, screen: bundle.fingerprint.screen, navigator: bundle.fingerprint.navigator, type: 'new'};
   }
-
-  // 情况 B: 旧结构 (直接是 Fingerprint 对象) - 用于兼容旧存档
   if (bundle && bundle.screen && bundle.navigator) {
-    return {
-      valid: true,
-      screen: bundle.screen,
-      navigator: bundle.navigator,
-      type: "legacy",
-    };
+     return { valid: true, screen: bundle.screen, navigator: bundle.navigator, type: 'legacy'};
   }
-
   return { valid: false };
 }
 
@@ -50,74 +91,54 @@ export async function initSystem(config) {
   // 2. 加载数据
   let profileData = fileUtils.readJson(profilePath) || {
     createdAt: new Date().toISOString(),
-    cookies: [],
-    localStorage: {},
   };
 
-  // 3. 启动浏览器 (获取全新的 fingerprintBundle)
+  // 3. 启动浏览器
   const { browser, injector, fingerprintBundle } = await launchBrowser();
 
-  // === [核心修复：指纹结构归一化] ===
-  // 优先使用本地存档的指纹
+  // === 指纹处理 ===
   let currentBundle = profileData.fingerprint;
   let validation = validateFingerprintBundle(currentBundle);
 
   if (!validation.valid) {
-    console.warn("⚠️ 本地指纹无效或缺失，使用新生成的指纹包...");
+    console.warn("⚠️ 指纹更新...");
     currentBundle = fingerprintBundle;
-
-    // 保存到 Profile (保存完整的 BrowserFingerprintWithHeaders)
     profileData.fingerprint = currentBundle;
     fileUtils.writeJson(profilePath, profileData);
-
-    // 重新校验新指纹
     validation = validateFingerprintBundle(currentBundle);
-  } else {
-    console.log("🆔 使用已保存的指纹");
   }
-
-  // 此时 validation.screen 必定存在
   const { screen, navigator } = validation;
-  // ===================================
 
-  // 4. 创建 BrowserContext
+  // === [核心] 准备 StorageState ===
+  // 这一步将数据转换为 Playwright 原生格式
+  const storageState = normalizeStorageState(profileData);
+
+  // 4. 创建 BrowserContext (直接注入状态!)
   const contextOptions = {
-    viewport: {
-      width: screen.width,
-      height: screen.height,
-    },
+    viewport: { width: screen.width, height: screen.height },
     userAgent: navigator.userAgent,
     locale: navigator.language,
     deviceScaleFactor: screen.devicePixelRatio,
     recordHar: {
-      path: path.join(sessionDir, "traffic.har"),
-      mode: "full",
-      content: "embed",
+        path: path.join(sessionDir, "traffic.har"),
+        mode: 'full', 
+        content: 'embed',
     },
     ignoreHTTPSErrors: true,
+    
+    // 🔥 这里是奇迹发生的地方：Playwright 会自动将数据分发到各个域名
+    storageState: storageState 
   };
 
   const context = await browser.newContext(contextOptions);
 
   // 5. 注入指纹
-  // 注意：injector.attachFingerprintToPlaywright 支持完整的 BrowserFingerprintWithHeaders
   await injector.attachFingerprintToPlaywright(context, currentBundle);
 
-  // 6. 恢复 Cookie
-  if (profileData.cookies && Array.isArray(profileData.cookies)) {
-    const validCookies = profileData.cookies.filter(
-      (c) => c.name && c.value && c.domain
-    );
-    if (validCookies.length > 0) {
-      console.log(`🍪 恢复 ${validCookies.length} 个 Cookies`);
-      await context.addCookies(validCookies);
-    }
-  }
-
-  // 7. 创建页面
+  // 6. 创建页面
   const page = await context.newPage();
 
-  // 8. 构建上下文
+  // 7. 构建上下文
   const ctx = buildContext(page, context, browser, profileData, profilePath);
 
   return { browser, context, page, ctx, sessionDir };

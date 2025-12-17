@@ -1,7 +1,7 @@
 /**
  * @file src/core/context.js
- * @description 上下文工厂 (Playwright 原生精简版)。
- * 移除 ghost-cursor，使用 Playwright 原生 API 实现拟人化操作。
+ * @description 上下文工厂 (Playwright Native Storage 版)。
+ * 升级：使用 context.storageState() 一键导出所有源的会话数据。
  */
 
 import * as fileUtils from "../utils/file-system.js";
@@ -12,56 +12,28 @@ import { delay } from "../utils/helpers.js";
  */
 export function buildContext(page, context, browser, profileData, profilePath) {
   
-  // === 原生光标模拟器 ===
-  // 保持与旧策略代码的接口兼容 (cursor.click, cursor.move)
+  // === 原生光标模拟器 (保持不变，非常好用) ===
   const cursor = {
-    /**
-     * 移动鼠标到指定元素
-     * @param {string|Locator} target - 选择器字符串或 Locator 对象
-     */
     async move(target) {
       try {
         const locator = typeof target === 'string' ? page.locator(target).first() : target;
-        
-        // 1. 滚动到视口 (智能滚动)
-        // Playwright 会自动处理，但显式调用更安全
         await locator.scrollIntoViewIfNeeded().catch(() => {});
-
-        // 2. 获取元素中心坐标 (boundingBox)
         const box = await locator.boundingBox();
-        if (!box) return; // 元素不可见，忽略
-
-        // 3. 计算带随机偏移的目标点
+        if (!box) return;
         const x = box.x + box.width / 2 + (Math.random() - 0.5) * (box.width * 0.5);
         const y = box.y + box.height / 2 + (Math.random() - 0.5) * (box.height * 0.5);
-
-        // 4. 执行平滑移动
-        // steps: 10-25 之间随机，模拟人类移动速度
         await page.mouse.move(x, y, { steps: 10 + Math.floor(Math.random() * 15) });
-      } catch (e) {
-        // 忽略移动过程中的错误（如元素突然消失）
-      }
+      } catch (e) {}
     },
-
-    /**
-     * 点击指定元素 (移动 -> 点击)
-     * @param {string|Locator} target 
-     */
     async click(target) {
       const locator = typeof target === 'string' ? page.locator(target).first() : target;
       try {
-        // 使用 Playwright 原生 click
-        // 它会自动执行: 滚动 -> 等待可见 -> 等待无遮挡 -> 移动鼠标 -> 按下 -> 释放
         await locator.click({ delay: 50 + Math.random() * 100 }); 
       } catch (e) {
         console.warn(`⚠️ 点击失败，尝试强制点击: ${e.message}`);
         await locator.click({ force: true });
       }
     },
-
-    /**
-     * 随机移动 (防发呆)
-     */
     async moveToRandom() {
       const vp = page.viewportSize();
       if (!vp) return;
@@ -75,28 +47,25 @@ export function buildContext(page, context, browser, profileData, profilePath) {
     log: (msg) => console.log(`🤖 [拟人] ${msg}`),
     delay: delay,
 
-    // 保存会话 (Cookie + LocalStorage)
+    // === [核心升级] 原生全量保存 ===
     saveSession: async () => {
       try {
-        // 1. 保存 Cookies
-        const cookies = await context.cookies();
-        
-        // 2. 保存 LocalStorage
-        let localStorageData = {};
-        try {
-            // 需要在页面上下文中执行
-            const jsonStr = await page.evaluate(() => JSON.stringify(window.localStorage));
-            localStorageData = JSON.parse(jsonStr);
-        } catch(e) {
-            // 如果页面已关闭或上下文失效，可能获取失败
-        }
+        // 1. 获取 Playwright 标准状态 (包含所有 Cookie 和所有 Origin 的 LS)
+        const storageState = await context.storageState();
 
-        profileData.cookies = cookies;
-        profileData.localStorage = localStorageData;
+        // 2. 更新 profileData
+        // 我们不再单独存 cookies/localStorage，而是存一个标准的 storageState 对象
+        profileData.storageState = storageState;
+        
+        // *兼容性清理*：如果存在旧的字段，可以删除它们以减小文件体积
+        delete profileData.cookies;
+        delete profileData.localStorage;
+
         profileData.lastActive = new Date().toISOString();
 
+        // 3. 写入文件
         fileUtils.writeJson(profilePath, profileData);
-        console.log("💾 会话状态已保存");
+        console.log("💾 完整会话状态 (StorageState) 已保存");
       } catch (error) {
         console.error(`❌ 保存会话失败: ${error.message}`);
       }

@@ -67,10 +67,12 @@ export async function humanHover(cursor, page, selectors) {
         // CursorAdapter.move 会接收这个 selector 字符串
         // 并自动计算 Playwright 的 coordinates
         await cursor.move(selector);
-        
+
         await new Promise((r) => setTimeout(r, 500 + Math.random() * 1200));
       }
-    } catch (e) { /* ignore */ }
+    } catch (e) {
+      /* ignore */
+    }
   }
 }
 
